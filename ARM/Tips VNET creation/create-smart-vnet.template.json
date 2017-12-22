@@ -1,0 +1,75 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "vnetName": {
+            "type":"string",
+            "defaultValue": "demo-vnet",
+            "metadata": {
+                "description" : "Virtual network name"
+            }
+        }, 
+        "vnetAddressPrefix": {
+            "type": "string",
+            "defaultValue": "16.0.0.0/16",
+            "metadata": {
+                "description": "Address prefix"
+            }
+        }, 
+        "subnets":{
+            "type": "array",
+            "defaultValue": [
+                {
+                    "Name": "Front",
+                    "Prefix": "16.0.1.0/24"
+                },
+                {
+                    "Name": "Middle",
+                    "Prefix": "16.0.2.0/24"
+                },
+                {
+                    "Name": "Back",
+                    "Prefix": "16.0.3.0/24"
+                }
+            ],
+            "metadata": {
+                "description" : "List of subnets to create"
+            }
+        }
+    },
+    "variables": {
+        "vnetName":"[parameters('vnetName')]", 
+        "vnetAddressPrefix": "[parameters('vnetAddressPrefix')]", 
+        "subnets": "[parameters('subnets')]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2015-06-15",
+            "type": "Microsoft.Network/virtualNetworks",
+            "name": "[variables('vnetName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+              "addressSpace": {
+                "addressPrefixes": [
+                  "[variables('vnetAddressPrefix')]"
+                ]
+              },
+              "copy": [
+                  {
+                      "name": "subnets",
+                      "count": "[length(variables('subnets'))]",
+                      "input": {
+                          "name": "[variables('subnets')[copyIndex('subnets')].Name]",
+                          "properties": {
+                              "addressPrefix": "[variables('subnets')[copyIndex('subnets')].Prefix]"
+                          }
+                      }
+                  }
+              ]
+            }
+        }
+    ],
+    "outputs": {
+        
+    }
+}
