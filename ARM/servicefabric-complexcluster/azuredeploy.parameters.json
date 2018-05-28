@@ -1,0 +1,228 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "virtualNetwork": {
+      "value": {
+        "name": "demo-blog-arm",
+        "addressPrefix": "16.0.0.0/20",
+        "subnets": [
+          {
+            "name": "FrontSubnet",
+            "addressPrefix": "16.0.0.0/24"
+          },
+          {
+            "name": "MiddleSubnet",
+            "addressPrefix": "16.0.1.0/24"
+          },
+          {
+            "name": "BackSubnet",
+            "addressPrefix": "16.0.2.0/24"
+          },
+          {
+            "name": "AdminSubnet",
+            "addressPrefix": "16.0.3.0/24"
+          },
+          {
+            "name": "GatewaySubnet",
+            "addressPrefix": "16.0.15.224/27"
+          }
+        ]
+      }
+    },
+    "storageAccounts": {
+      "value": [
+        {
+          "name": "diagsfdemoblog"
+        },
+        {
+          "name": "logssfdemoblog"
+        }
+      ]
+    },
+    "globalStorageAccountSku": {
+      "value": "Standard_LRS"
+    },
+    "loadBalancers": {
+      "value": [
+        {
+          "name": "front",
+          "accessType": "public",
+          "dns": "wwosfdemo",
+          "port": [ 80, 8080, 443 ]
+        },
+        {
+          "name": "middle",
+          "accessType": "private",
+          "subnetName": "MiddleSubnet",
+          "ipAddress": "16.0.1.4",
+          "port": [ 8081 ]
+        },
+        {
+          "name": "back",
+          "accessType": "private",
+          "subnetName": "BackSubnet",
+          "ipAddress": "16.0.2.4",
+          "port": [ 8082 ]
+        },
+        {
+          "name": "admin",
+          "accessType": "public",
+          "subnetName": "AdminSubnet",
+          "ipAddress": "16.0.3.4",
+          "dns": "adminsf" ,
+          "port": [ 19000, 19080 ]
+        }
+
+      ]
+    },
+    "sfCluster": {
+      "value": {
+        "name": "democluster",
+        "security": {
+          "osAdminUserName": "",
+          "level": "EncryptAndSign",
+          "thumbprint": "",
+          "store": "My",
+          "vaultUrl": "",
+          "vaultResourceId": "",
+          "aad": {
+            "tenantId": "",
+            "clusterAppId": "",
+            "clientAppId": ""
+          }
+        },
+        "managementEndpoint": {
+          "Port": 19080,
+          "type": "private",
+          "private": {
+            "ipAddress": "16.3.0.4"
+          }
+        },
+        "nodes": [
+          {
+            "name": "AdminNode",
+            "os": {
+              "publisher": "MicrosoftWindowsServer",
+              "offer": "WindowsServer",
+              "sku": "2012-R2-Datacenter",
+              "version": "latest"
+            },
+            "instance": {
+              "size": "Standard_D2_V2",
+              "count": 3,
+              "tier": "Standard"
+            },
+            "applicationPorts": {
+              "startPort": 20000,
+              "endPort": 30000
+            },
+            "ephemeralPorts": {
+              "startPort": 49152,
+              "endPort": 65534
+            },
+            "fabric": {
+              "tcpGatewayPort": 19000,
+              "httpGatewayPort": 19080
+            },
+            "isPrimary": true,
+            "subnetName": "AdminSubnet",
+            "loadBalancerName": "admin-public-lb"
+          },
+          {
+            "name": "BackNode",
+            "os": {
+              "publisher": "MicrosoftWindowsServer",
+              "offer": "WindowsServer",
+              "sku": "2012-R2-Datacenter",
+              "version": "latest"
+            },
+            "instance": {
+              "size": "Standard_D2_V2",
+              "count": 3,
+              "tier": "Standard"
+            },
+            "applicationPorts": {
+              "startPort": 20000,
+              "endPort": 30000
+            },
+            "ephemeralPorts": {
+              "startPort": 49152,
+              "endPort": 65534
+            },
+            "fabric": {
+              "tcpGatewayPort": 19000,
+              "httpGatewayPort": 19080
+            },
+            "isPrimary": false,
+            "subnetName": "BackSubnet",
+            "loadBalancerName": "back-private-lb"
+          },
+          {
+            "name": "MidNode",
+            "os": {
+              "publisher": "MicrosoftWindowsServer",
+              "offer": "WindowsServer",
+              "sku": "2012-R2-Datacenter",
+              "version": "latest"
+            },
+            "instance": {
+              "size": "Standard_D2_V2",
+              "count": 3,
+              "tier": "Standard"
+            },
+            "applicationPorts": {
+              "startPort": 20000,
+              "endPort": 30000
+            },
+            "ephemeralPorts": {
+              "startPort": 49152,
+              "endPort": 65534
+            },
+            "fabric": {
+              "tcpGatewayPort": 19000,
+              "httpGatewayPort": 19080
+            },
+            "isPrimary": false,
+            "subnetName": "MiddleSubnet",
+            "loadBalancerName": "middle-private-lb"
+          },
+          {
+            "name": "FrontNode",
+            "os": {
+              "publisher": "MicrosoftWindowsServer",
+              "offer": "WindowsServer",
+              "sku": "2012-R2-Datacenter",
+              "version": "latest"
+            },
+            "instance": {
+              "size": "Standard_D2_V2",
+              "count": 3,
+              "tier": "Standard"
+            },
+            "applicationPorts": {
+              "startPort": 20000,
+              "endPort": 30000
+            },
+            "ephemeralPorts": {
+              "startPort": 49152,
+              "endPort": 65534
+            },
+            "fabric": {
+              "tcpGatewayPort": 19000,
+              "httpGatewayPort": 19080
+            },
+            "isPrimary": false,
+            "subnetName": "FrontSubnet",
+            "loadBalancerName": "front-public-lb"
+          }
+        ],
+        "diagnosticsStoreName": "diagsfdemoblog",
+        "supportStoreName": "logssfdemoblog"
+      }
+    },
+    "osAdminPassword": {
+      "value": ""
+    }
+  }
+}

@@ -1,0 +1,648 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "virtualNetwork": {
+      "type": "object",
+      "defaultValue": {
+        "name": "",
+        "addressPrefix": "",
+        "subnets": [
+          {
+            "name": "",
+            "addressPrefix": ""
+          }
+        ]
+      },
+      "metadata": {
+        "description": "Virtual Network object"
+      }
+    },
+    "storageAccounts": {
+      "type": "array",
+      "defaultValue": [
+        {
+          "name": ""
+        }
+      ],
+      "metadata": {
+        "description": "Storage Account list"
+      }
+    },
+    "globalStorageAccountSku": {
+      "type": "string",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_GRS"
+      ],
+      "metadata": {
+        "description": "Sku for all storage accounts"
+      }
+    },
+    "loadBalancers": {
+      "type": "array",
+      "defaultValue": [
+        {
+          "name": "",
+          "accessType": "public",
+          "dns": "",
+          "port": [ 443 ]
+        },
+        {
+          "name": "",
+          "accessType": "private",
+          "subnetName": "",
+          "port": [ 19000, 19080 ]
+        }
+      ],
+      "metadata": {
+        "description": "Load balancers definition"
+      }
+    },
+    "sfCluster": {
+      "type": "object",
+      "defaultValue": {
+        "name": "",
+        "security": {
+          "osAdminUserName": "",
+          "level": "EncryptAndSign",
+          "thumbprint": "",
+          "store": "",
+          "vaultUrl": "",
+          "vaultResourceId": "",
+          "aad": {
+            "tenantId": "",
+            "clusterAppId": "",
+            "clientAppId": ""
+          }
+        },
+        "managementEndpoint": {
+          "Port": "19080",
+          "type": "public|private",
+          "public": {
+            "name": ""
+          },
+          "private": {
+            "ipAddress": ""
+          }
+        },
+        "nodes": [
+          {
+            "name": "",
+            "os": {
+              "publisher": "",
+              "offer": "",
+              "sku": "",
+              "version": ""
+            },
+            "instance": {
+              "size": "",
+              "count": "",
+              "tier": ""
+            },
+            "applicationPorts": {
+              "startPort": "",
+              "endPort": ""
+            },
+            "ephemeralPorts": {
+              "startPort": "",
+              "endPort": ""
+            },
+            "fabric": {
+              "tcpGatewayPort": "",
+              "httpGatewayPort": ""
+            },
+            "isPrimary": false,
+            "instanceCount": "",
+            "subnetName": "",
+            "loadBalancerName": ""
+          }
+        ],
+        "diagnosticsStoreName": "",
+        "supportStoreName": ""
+      },
+      "metadata": {
+        "description": "Service Fabric definition"
+      }
+    },
+    "osAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Admin password for VMSS"
+      }
+    }
+  },
+  "variables": {
+    "virtualNetwork": "[parameters('virtualNetwork')]",
+    "storageAccount": "[parameters('storageAccounts')]",
+    "globalStorageAccountSku": "[parameters('globalStorageAccountSku')]",
+    "loadBalancers": "[parameters('loadBalancers')]",
+    "sfCluster": "[parameters('sfCluster')]",
+
+    "suffix": {
+      "publicIPAddress": "-ip",
+      "publicLoadBalancers": "-public-lb",
+      "privateLoadBalancers": "-private-lb"
+    }
+  },
+  "resources": [
+    {
+      "apiVersion": "2017-10-01",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[variables('virtualNetwork').name]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "Virtual Network"
+      },
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('virtualNetwork').addressPrefix]"
+          ]
+        },
+        "copy": [
+          {
+            "name": "subnets",
+            "count": "[length(variables('virtualNetwork').subnets)]",
+            "input": {
+              "name": "[variables('virtualNetwork').subnets[copyIndex('subnets')].name]",
+              "properties": {
+                "addressPrefix": "[variables('virtualNetwork').subnets[copyIndex('subnets')].addressPrefix]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2017-10-01",
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[variables('storageAccount')[copyIndex('storageLoop')].name]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "Storage Accounts"
+      },
+      "properties": {
+        "encryption": {
+          "keySource": "Microsoft.Storage",
+          "services": {
+            "blob": {
+              "enabled": true
+            }
+          }
+        },
+        "supportsHttpsTrafficOnly": true
+      },
+      "kind": "StorageV2",
+      "sku": {
+        "name": "[variables('globalStorageAccountSku')]"
+      },
+      "copy": {
+        "name": "storageLoop",
+        "count": "[length(variables('storageAccount'))]"
+      }
+    },
+    {
+      "apiVersion": "2017-10-01",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "condition": "[equals(variables('loadBalancers')[copyIndex('publicIpLoop')].accessType, 'public')]",
+      "name": "[concat(variables('loadBalancers')[copyIndex('publicIpLoop')].name, variables('suffix').publicIPAddress)]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "Public IP"
+      },
+      "properties": {
+        "dnsSettings": {
+          "domainNameLabel": "[variables('loadBalancers')[copyIndex('publicIpLoop')].dns]"
+        },
+        "publicIPAllocationMethod": "Dynamic"
+      },
+      "copy": {
+        "name": "publicIpLoop",
+        "count": "[length(variables('loadBalancers'))]"
+      }
+    },
+    {
+      "apiVersion": "2017-10-01",
+      "type": "Microsoft.Network/loadBalancers",
+      "condition": "[equals(variables('loadBalancers')[copyIndex('loadBalancersLoop')].accessType, 'public')]",
+      "name": "[concat(variables('loadBalancers')[copyIndex('loadBalancersLoop')].name, variables('suffix').publicLoadBalancers)]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "External Load Balancer"
+      },
+      "dependsOn": [
+        "publicIpLoop"
+      ],
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "FrontEndPublicIPConfiguration",
+            "properties": {
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(variables('loadBalancers')[copyIndex('loadBalancersLoop')].name, variables('suffix').publicIPAddress))]"
+              }
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "BackEndAddressPool"
+          }
+        ],
+        "inboundNatPools": [
+          {
+            "name": "BackEndNatPool",
+            "properties": {
+              "backendPort": 3389,
+              "frontendIPConfiguration": {
+                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('loadBalancers')[copyIndex('loadBalancersLoop')].name, variables('suffix').publicLoadBalancers)), '/frontendIPConfigurations/FrontEndPublicIPConfiguration')]"
+              },
+              "frontendPortRangeEnd": 4500,
+              "frontendPortRangeStart": 3389,
+              "protocol": "Tcp"
+            }
+          }
+        ],
+        "copy": [
+          {
+            "name": "probes",
+            "count": "[length(variables('loadBalancers')[copyIndex('loadBalancersLoop')].port)]",
+            "input": {
+              "name": "[concat('probe-', variables('loadBalancers')[copyIndex('loadBalancersLoop')].port[copyIndex('probes')])]",
+              "properties": {
+                "intervalInSeconds": 5,
+                "numberOfProbes": 2,
+                "port": "[variables('loadBalancers')[copyIndex('loadBalancersLoop')].port[copyIndex('probes')]]",
+                "protocol": "Tcp"
+              }
+            }
+          },
+          {
+            "name": "loadBalancingRules",
+            "count": "[length(variables('loadBalancers')[copyIndex('loadBalancersLoop')].port)]",
+            "input": {
+              "name": "[concat('rule-', variables('loadBalancers')[copyIndex('loadBalancersLoop')].port[copyIndex('loadBalancingRules')])]",
+              "properties": {
+                "backendAddressPool": {
+                  "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('loadBalancers')[copyIndex('loadBalancersLoop')].name, variables('suffix').publicLoadBalancers)), '/backendAddressPools/BackEndAddressPool')]"
+                },
+                "backendPort": "[variables('loadBalancers')[copyIndex('loadBalancersLoop')].port[copyIndex('loadBalancingRules')]]",
+                "enableFloatingIP": false,
+                "frontendIPConfiguration": {
+                  "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('loadBalancers')[copyIndex('loadBalancersLoop')].name, variables('suffix').publicLoadBalancers)), '/frontendIPConfigurations/FrontEndPublicIPConfiguration')]"
+                },
+                "frontendPort": "[variables('loadBalancers')[copyIndex('loadBalancersLoop')].port[copyIndex('loadBalancingRules')]]",
+                "idleTimeoutInMinutes": 5,
+                "probe": {
+                  "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('loadBalancers')[copyIndex('loadBalancersLoop')].name, variables('suffix').publicLoadBalancers)), '/probes/', concat('probe-', variables('loadBalancers')[copyIndex('loadBalancersLoop')].port[copyIndex('loadBalancingRules')]))]"
+                },
+                "protocol": "Tcp"
+              }
+            }
+          }
+        ]
+      },
+      "copy": {
+        "name": "loadBalancersLoop",
+        "count": "[length(variables('loadBalancers'))]"
+      }
+    },
+    {
+      "apiVersion": "2017-10-01",
+      "type": "Microsoft.Network/loadBalancers",
+      "condition": "[equals(variables('loadBalancers')[copyIndex('loadBalancersLoop')].accessType, 'private')]",
+      "name": "[concat(variables('loadBalancers')[copyIndex('loadBalancersLoop')].name, variables('suffix').privateLoadBalancers)]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "Internal Load Balancer"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetwork').name)]"
+      ],
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "FrontEndPrivateIPConfiguration",
+            "properties": {
+              "subnet": {
+                "id": "[concat(resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetwork').name), '/subnets/', variables('loadBalancers')[copyIndex('loadBalancersLoop')].subnetName)]"
+              },
+              "privateIPAddress": "[variables('loadBalancers')[copyIndex('loadBalancersLoop')].ipAddress]",
+              "privateIPAllocationMethod": "Static"
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "BackEndAddressPool"
+          }
+        ],
+        "inboundNatPools": [
+          {
+            "name": "BackEndNatPool",
+            "properties": {
+              "backendPort": 3389,
+              "frontendIPConfiguration": {
+                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('loadBalancers')[copyIndex('loadBalancersLoop')].name, variables('suffix').privateLoadBalancers)), '/frontendIPConfigurations/FrontEndPrivateIPConfiguration')]"
+              },
+              "frontendPortRangeEnd": 4500,
+              "frontendPortRangeStart": 3389,
+              "protocol": "Tcp"
+            }
+          }
+        ],
+        "copy": [
+          {
+            "name": "probes",
+            "count": "[length(variables('loadBalancers')[copyIndex('loadBalancersLoop')].port)]",
+            "input": {
+              "name": "[concat('probe-', variables('loadBalancers')[copyIndex('loadBalancersLoop')].port[copyIndex('probes')])]",
+              "properties": {
+                "intervalInSeconds": 5,
+                "numberOfProbes": 2,
+                "port": "[variables('loadBalancers')[copyIndex('loadBalancersLoop')].port[copyIndex('probes')]]",
+                "protocol": "Tcp"
+              }
+            }
+          },
+          {
+            "name": "loadBalancingRules",
+            "count": "[length(variables('loadBalancers')[copyIndex('loadBalancersLoop')].port)]",
+            "input": {
+              "name": "[concat('rule-', variables('loadBalancers')[copyIndex('loadBalancersLoop')].port[copyIndex('loadBalancingRules')])]",
+              "properties": {
+                "backendAddressPool": {
+                  "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('loadBalancers')[copyIndex('loadBalancersLoop')].name, variables('suffix').privateLoadBalancers)), '/backendAddressPools/BackEndAddressPool')]"
+                },
+                "backendPort": "[variables('loadBalancers')[copyIndex('loadBalancersLoop')].port[copyIndex('loadBalancingRules')]]",
+                "enableFloatingIP": false,
+                "frontendIPConfiguration": {
+                  "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('loadBalancers')[copyIndex('loadBalancersLoop')].name, variables('suffix').privateLoadBalancers)), '/frontendIPConfigurations/FrontEndPrivateIPConfiguration')]"
+                },
+                "frontendPort": "[variables('loadBalancers')[copyIndex('loadBalancersLoop')].port[copyIndex('loadBalancingRules')]]",
+                "idleTimeoutInMinutes": 5,
+                "probe": {
+                  "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('loadBalancers')[copyIndex('loadBalancersLoop')].name, variables('suffix').privateLoadBalancers)), '/probes/', concat('probe-', variables('loadBalancers')[copyIndex('loadBalancersLoop')].port[copyIndex('loadBalancingRules')]))]"
+                },
+                "protocol": "Tcp"
+              }
+            }
+          }
+        ]
+      },
+      "copy": {
+        "name": "loadBalancersLoop",
+        "count": "[length(variables('loadBalancers'))]"
+      }
+    },
+    {
+      "apiVersion": "2017-07-01-preview",
+      "type": "Microsoft.ServiceFabric/clusters",
+      "name": "[variables('sfCluster').name]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "Cluster Service Fabric"
+      },
+      "dependsOn": [
+        "storageLoop"
+      ],
+      "properties": {
+        "addOnFeatures": [
+          "DnsService",
+          "RepairManager"
+        ],
+        "certificate": {
+          "thumbprint": "[variables('sfCluster').security.thumbprint]",
+          "x509StoreName": "[variables('sfCluster').security.store]"
+        },
+        "azureActiveDirectory": {
+          "tenantId": "[variables('sfCluster').security.aad.tenantId]",
+          "clusterApplication": "[variables('sfCluster').security.aad.clusterAppId]",
+          "clientApplication": "[variables('sfCluster').security.aad.clientAppId]"
+        },
+        "diagnosticsStorageAccountConfig": {
+          "storageAccountName": "[variables('sfCluster').diagnosticsStoreName]",
+          "protectedAccountKeyName": "StorageAccountKey1",
+          "blobEndpoint": "[reference(concat('Microsoft.Storage/storageAccounts/', variables('sfCluster').diagnosticsStoreName), '2017-10-01').primaryEndpoints.blob]",
+          "queueEndpoint": "[reference(concat('Microsoft.Storage/storageAccounts/', variables('sfCluster').diagnosticsStoreName), '2017-10-01').primaryEndpoints.queue]",
+          "tableEndpoint": "[reference(concat('Microsoft.Storage/storageAccounts/', variables('sfCluster').diagnosticsStoreName), '2017-10-01').primaryEndpoints.table]"
+        },
+        "fabricSettings": [
+          {
+            "parameters": [
+              {
+                "name": "ClusterProtectionLevel",
+                "value": "[variables('sfCluster').security.level]"
+              }
+            ],
+            "name": "Security"
+          }
+        ],
+        "managementEndpoint": "[concat('https://', if(equals(variables('sfCluster').managementEndpoint.type, 'public'), reference(concat('Microsoft.Network/publicIPAddresses/', variables('sfCluster').managementEndpoint.public.name, variables('suffix').publicIPAddress), '2017-10-01').dnsSettings.fqdn, variables('sfCluster').managementEndpoint.private.ipAddress), ':', variables('sfCluster').managementEndpoint.port)]",
+        "copy": [
+          {
+            "name": "nodeTypes",
+            "count": "[length(variables('sfCluster').nodes)]",
+            "input": {
+              "name": "[variables('sfCluster').nodes[copyIndex('nodeTypes')].name]",
+              "applicationPorts": {
+                "endPort": "[variables('sfCluster').nodes[copyIndex('nodeTypes')].applicationPorts.endPort]",
+                "startPort": "[variables('sfCluster').nodes[copyIndex('nodeTypes')].applicationPorts.startPort]"
+              },
+              "clientConnectionEndpointPort": "[variables('sfCluster').nodes[copyIndex('nodeTypes')].fabric.tcpGatewayPort]",
+              "durabilityLevel": "Bronze",
+              "ephemeralPorts": {
+                "endPort": "[variables('sfCluster').nodes[copyIndex('nodeTypes')].ephemeralPorts.endPort]",
+                "startPort": "[variables('sfCluster').nodes[copyIndex('nodeTypes')].ephemeralPorts.startPort]"
+              },
+              "httpGatewayEndpointPort": "[variables('sfCluster').nodes[copyIndex('nodeTypes')].fabric.httpGatewayPort]",
+              "isPrimary": "[variables('sfCluster').nodes[copyIndex('nodeTypes')].isPrimary]",
+              "vmInstanceCount": "[variables('sfCluster').nodes[copyIndex('nodeTypes')].instance.count]"
+            }
+          }
+        ],
+        "reliabilityLevel": "Bronze",
+        "upgradeMode": "Automatic",
+        "vmImage": "Windows"
+      }
+    },
+    {
+      "apiVersion": "2017-03-30",
+      "type": "Microsoft.Compute/virtualMachineScaleSets",
+      "name": "[variables('sfCluster').nodes[copyIndex('nodeLoop')].name]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetwork').name)]",
+        "loadBalancersLoop",
+        "storageLoop"
+      ],
+      "tags": {
+        "displayName": "Virtual Machine Scale Set"
+      },
+      "properties": {
+        "overprovision": false,
+        "upgradePolicy": {
+          "mode": "Automatic"
+        },
+        "virtualMachineProfile": {
+          "extensionProfile": {
+            "extensions": [
+              {
+                "name": "[concat(variables('sfCluster').nodes[copyIndex('nodeLoop')].name,'_ServiceFabricNode')]",
+                "properties": {
+                  "type": "ServiceFabricNode",
+                  "autoUpgradeMinorVersion": true,
+                  "protectedSettings": {
+                    "StorageAccountKey1": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('sfCluster').diagnosticsStoreName),'2015-05-01-preview').key1]",
+                    "StorageAccountKey2": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('sfCluster').diagnosticsStoreName),'2015-05-01-preview').key2]"
+                  },
+                  "publisher": "Microsoft.Azure.ServiceFabric",
+                  "settings": {
+                    "certificate": {
+                      "thumbprint": "[variables('sfCluster').security.thumbprint]",
+                      "x509StoreName": "[variables('sfCluster').security.store]"
+                    },
+                    "clusterEndpoint": "[reference(variables('sfCluster').name).clusterEndpoint]",
+                    "dataPath": "D:\\\\SvcFab",
+                    "durabilityLevel": "Bronze",
+                    "enableParallelJobs": true,
+                    "nodeTypeRef": "[variables('sfCluster').nodes[copyIndex('nodeLoop')].name]"
+                  },
+                  "typeHandlerVersion": "1.0"
+                }
+              },
+              {
+                "name": "[concat(variables('sfCluster').nodes[copyIndex('nodeLoop')].name,'_VMDiagnosticsExtensions')]",
+                "properties": {
+                  "type": "IaaSDiagnostics",
+                  "autoUpgradeMinorVersion": true,
+                  "protectedSettings": {
+                    "storageAccountName": "[variables('sfCluster').diagnosticsStoreName]",
+                    "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('sfCluster').diagnosticsStoreName),'2015-05-01-preview').key1]",
+                    "storageAccountEndPoint": "https://core.windows.net/"
+                  },
+                  "publisher": "Microsoft.Azure.Diagnostics",
+                  "settings": {
+                    "WadCfg": {
+                      "DiagnosticMonitorConfiguration": {
+                        "overallQuotaInMB": "50000",
+                        "EtwProviders": {
+                          "EtwEventSourceProviderConfiguration": [
+                            {
+                              "provider": "Microsoft-ServiceFabric-Actors",
+                              "scheduledTransferKeywordFilter": "1",
+                              "scheduledTransferPeriod": "PT5M",
+                              "DefaultEvents": {
+                                "eventDestination": "ServiceFabricReliableActorEventTable"
+                              }
+                            },
+                            {
+                              "provider": "Microsoft-ServiceFabric-Services",
+                              "scheduledTransferPeriod": "PT5M",
+                              "DefaultEvents": {
+                                "eventDestination": "ServiceFabricReliableServiceEventTable"
+                              }
+                            }
+                          ],
+                          "EtwManifestProviderConfiguration": [
+                            {
+                              "provider": "cbd93bc2-71e5-4566-b3a7-595d8eeca6e8",
+                              "scheduledTransferLogLevelFilter": "Information",
+                              "scheduledTransferKeywordFilter": "4611686018427387904",
+                              "scheduledTransferPeriod": "PT5M",
+                              "DefaultEvents": {
+                                "eventDestination": "ServiceFabricSystemEventTable"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "StorageAccount": "[variables('sfCluster').diagnosticsStoreName]"
+                  },
+                  "typeHandlerVersion": "1.5"
+                }
+              }
+            ]
+          },
+          "networkProfile": {
+            "networkInterfaceConfigurations": [
+              {
+                "name": "[concat(variables('sfCluster').nodes[copyIndex('nodeLoop')].name, '-nic')]",
+                "properties": {
+                  "ipConfigurations": [
+                    {
+                      "name": "[concat(variables('sfCluster').nodes[copyIndex('nodeLoop')].name, '-nic-config')]",
+                      "condition": false, 
+                      "properties": {
+                        "loadBalancerBackendAddressPools": [
+                          {
+                            "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('sfCluster').nodes[copyIndex('nodeLoop')].loadBalancerName)), '/backendAddressPools/BackEndAddressPool')]"
+                          }
+                        ],
+                        "loadBalancerInboundNatPools": [
+                          {
+                            "id": "[concat(resourceId('Microsoft.Network/loadBalancers', concat(variables('sfCluster').nodes[copyIndex('nodeLoop')].loadBalancerName)), '/inboundNatPools/BackEndNatPool')]"
+                          }
+                        ],
+                        "subnet": {
+                          "id": "[concat(resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetwork').name), '/subnets/', variables('sfCluster').nodes[copyIndex('nodeLoop')].subnetName)]"
+                        }
+                      }
+                    }
+                  ],
+                  "primary": true
+                }
+              }
+            ]
+          },
+          "osProfile": {
+            "adminPassword": "[parameters('osAdminPassword')]",
+            "adminUsername": "[variables('sfCluster').security.osAdminUserName]",
+            "computernamePrefix": "[variables('sfCluster').nodes[copyIndex('nodeLoop')].name]",
+            "secrets": [
+              {
+                "sourceVault": {
+                  "id": "[variables('sfCluster').security.vaultResourceId]"
+                },
+                "vaultCertificates": [
+                  {
+                    "certificateStore": "[variables('sfCluster').security.store]",
+                    "certificateUrl": "[variables('sfCluster').security.vaultUrl]"
+                  }
+                ]
+              }
+            ]
+          },
+          "storageProfile": {
+            "imageReference": {
+              "publisher": "[variables('sfCluster').nodes[copyIndex('nodeLoop')].os.publisher]",
+              "offer": "[variables('sfCluster').nodes[copyIndex('nodeLoop')].os.offer]",
+              "sku": "[variables('sfCluster').nodes[copyIndex('nodeLoop')].os.sku]",
+              "version": "[variables('sfCluster').nodes[copyIndex('nodeLoop')].os.version]"
+            },
+            "osDisk": {
+              "caching": "ReadOnly",
+              "createOption": "FromImage",
+              "managedDisk": {
+                "storageAccountType": "[variables('globalStorageAccountSku')]"
+              }
+            }
+          }
+        }
+      },
+      "sku": {
+        "name": "[variables('sfCluster').nodes[copyIndex('nodeLoop')].instance.size]",
+        "capacity": "[variables('sfCluster').nodes[copyIndex('nodeLoop')].instance.count]",
+        "tier": "[variables('sfCluster').nodes[copyIndex('nodeLoop')].instance.tier]"
+      },
+      "copy": {
+        "name": "nodeLoop",
+        "count": "[length(variables('sfCluster').nodes)]"
+      }
+
+    }
+  ],
+  "outputs": {}
+}
