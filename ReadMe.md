@@ -1,1 +1,1 @@
-Repositories regroupant les codes sources utilisé dans les différents article de mon blog personnel : http://blog.woivre.fr
+Some content from my blogs : https://woivre.fr & https://woivre.com
