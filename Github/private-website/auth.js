@@ -4,7 +4,7 @@ const msalConfig = {
     auth: {
       clientId: "bd91bde3-ebdd-4610-b35e-6b22858d5564",
       authority: "https://login.microsoftonline.com/woivre.fr",
-      redirectUri: $siteUrl + "/login.html",
+      redirectUri: siteUrl + "/login.html",
     },
     cache: {
       cacheLocation: "sessionStorage", // This configures where your cache will be stored
@@ -24,7 +24,7 @@ const msalConfig = {
       .then(loginResponse => {
         console.log('id_token acquired at: ' + new Date().toString());
         console.log(loginResponse);
-        window.location.href = $siteUrl;
+        window.location.href = siteUrl;
       }).catch(error => {
         console.log(error);
       });
