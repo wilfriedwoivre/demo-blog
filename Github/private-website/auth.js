@@ -85,3 +85,7 @@ function callMSGraph(endpoint, token, callback) {
     .then(response => callback(response, endpoint))
     .catch(error => console.log(error))
 }
+
+function updateSignInAccount() {
+  
+}
