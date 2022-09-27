@@ -5,8 +5,16 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Index</title>
+    <script type="text/javascript" src="https://alcdn.msauth.net/lib/1.2.1/js/msal.js"
+        integrity="sha384-9TV1245fz+BaI+VvCjMYL0YDMElLBwNS84v3mY57pXNOt6xcUYch2QLImaTahcOP"
+        crossorigin="anonymous"></script>
+    <script type="text/javascript">
+        if (typeof Msal === 'undefined') document.write(unescape("%3Cscript src='https://alcdn.msftauth.net/lib/1.2.1/js/msal.js' type='text/javascript' integrity='sha384-m/3NDUcz4krpIIiHgpeO0O8uxSghb+lfBTngquAo2Zuy2fEF+YgFeP08PWFo5FiJ' crossorigin='anonymous'%3E%3C/script%3E"));
+    </script>
+
+    <script type="text/javascript" src="./auth.js"></script>
 </head>
-<body>
+<body onload="checkToken()">
     <h1>Index</h1>
     <noscript>
         <meta http-equiv="refresh" content="0; URL=https://demo.woivre.com/login.html" />

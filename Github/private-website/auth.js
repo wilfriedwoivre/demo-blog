@@ -1,8 +1,9 @@
 const siteUrl = window.location.origin
+const clientId = "bd91bde3-ebdd-4610-b35e-6b22858d5564";
 
 const msalConfig = {
     auth: {
-      clientId: "bd91bde3-ebdd-4610-b35e-6b22858d5564",
+      clientId: clientId,
       authority: "https://login.microsoftonline.com/woivre.fr",
       redirectUri: siteUrl + "/login.html",
     },
@@ -29,3 +30,19 @@ const msalConfig = {
         console.log(error);
       });
   }
+
+  function checkToken() {
+
+    const idToken = window.sessionStorage.getItem('msal.idtoken')
+    if (idToken === null) {
+        window.location.replace(siteUrl + "/login.html");
+    }
+
+    if (myMSALObj.clientId !== clientId) {
+        window.location.replace(siteUrl + "/login.html");
+    }
+    getTokenPopup(loginRequest).then(response => {
+        callMSGraph(graphConfig.graphMeEndpoint, response.accessToken, updateSignInAccount);
+    });
+
+}
