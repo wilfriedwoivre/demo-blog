@@ -46,3 +46,19 @@ const msalConfig = {
     });
 
 }
+
+function getTokenPopup(request) {
+  return myMSALObj.acquireTokenSilent(request)
+      .catch(error => {
+          console.log(error);
+          console.log("silent token acquisition fails. acquiring token using popup");
+
+          // fallback to interaction when silent call fails
+          return myMSALObj.acquireTokenPopup(request)
+              .then(tokenResponse => {
+                  return tokenResponse;
+              }).catch(error => {
+                  console.log(error);
+              });
+      });
+}
